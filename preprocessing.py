@@ -4,6 +4,8 @@ import argparse
 
 def main():
 
+    cv2.namedWindow("asd", cv2.WINDOW_NORMAL)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--image", required=True, help="input image file")
     args = parser.parse_args()
@@ -142,6 +144,7 @@ def main():
     print(H,",", W)
     chars = []
     # WORD SEGMENTATION
+    word_lines_per_line = []
     for y in range(1,len(lines)):
 
         word_lines = []
@@ -177,31 +180,42 @@ def main():
         for l in range(len(word_lines)):
             asd = cv2.line(asd, (word_lines[l],lines[y]), (word_lines[l], lines[y-1]), (200,0,0), 1)
 
+        word_lines_per_line.append(word_lines)
+
+    # We don't to this part inside the original loop, because we need every word for taking average
+    # Calculate average character width
+    # Average word width divided by 5 which is average word length in english
+    avg_char_len = int(np.mean([word_lines[i+1] - word_lines[i] for i in range(len(word_lines)-1) for word_lines in word_lines_per_line])) // 5
+
+    print(avg_char_len)
+
+    for y in range(1,len(lines)):
+
+        word_lines = word_lines_per_line[y-1]
         for l in range(len(word_lines)-1):
 
             hist = np.sum(binarized[lines[y-1]:lines[y],word_lines[l]:word_lines[l+1]], 0)
 
-            print(hist)
+            # print(hist)
             hist = cv2.threshold(np.array(hist, dtype=np.uint8), 0, 255,
-                                 cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+                                 cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1].reshape(-1)
 
-            print(hist)
-
-            char_lines = []
+            # print(hist)
+            possible_lines = []
             isfirstchar = True
             count = 0
             counts = []
             for h in range(len(hist)):
                 if isfirstchar:
                     if hist[h] != 0:
-                        char_lines.append(max(h-1,0)) # max because if it is the first pixel
+                        possible_lines.append(max(h-1,0)) # max because if it is the first pixel
                         isfirstchar = False
                 else:
                     if hist[h] == 0:
                         count += 1
                     elif hist[h] != 0 and count != 0:
                         # counts.append([h - (count // 2) - 1, count])
-                        char_lines.append(h - (count // 2))
+                        possible_lines.append(h - (count // 2))
                         count = 0
 
             # if counts:
@@ -212,22 +226,44 @@ def main():
             #     distance = distance.reshape(-1)
             #     char_lines.extend([c[0] for c in counts[distance > 0]])
 
-            char_lines.append(min(len(hist) - count + 1,word_lines[l+1])) # Adding last line
+            possible_lines.append(min(len(hist) - count + 1,word_lines[l+1])) # Adding last line
 
-            print(char_lines)
+            # print(possible_lines)
+            char_lines = []
+            for i in range(avg_char_len,word_lines[l+1] - word_lines[l] - avg_char_len,avg_char_len):
+                char_lines.append(possible_lines[np.argmin([abs(line - i) for line in possible_lines])])
 
-            chars.extend([rotated[lines[y-1]:lines[y],word_lines[l] + char_lines[c]:word_lines[l] + char_lines[c+1]] for c in range(len(char_lines) - 1)])
-            chars.append(rotated[lines[y-1]:lines[y],word_lines[l] + char_lines[-1]:word_lines[l+1]])
+            # print(char_lines)
+            # print("-----------------------------")
 
-            for c in range(len(char_lines)):
-                asd = cv2.line(asd, (word_lines[l] + char_lines[c],lines[y]), (word_lines[l] + char_lines[c], lines[y-1]), (60,0,0), 1)
+            if char_lines:
+                chars.append(rotated[lines[y-1]:lines[y],word_lines[l]:word_lines[l] + char_lines[0]])
+                chars.extend([rotated[lines[y-1]:lines[y],word_lines[l] + char_lines[c]:word_lines[l] + char_lines[c+1]] for c in range(len(char_lines) - 1) if char_lines[c+1] != char_lines[c]])
+                chars.append(rotated[lines[y-1]:lines[y],word_lines[l] + char_lines[-1]:word_lines[l+1]])
+            else:
+                chars.append(rotated[lines[y-1]:lines[y],word_lines[l]:word_lines[l+1]])
 
+            # Baseline. Just uses average char width
+            # if word_lines[l+1] - word_lines[l] > (avg_char_len + (avg_char_len // 2)):
+            #     last_line = ((word_lines[l+1] - word_lines[l]) // avg_char_len) * avg_char_len
+            #     chars.extend([rotated[lines[y-1]:lines[y],word_lines[l] + c:word_lines[l] + c + avg_char_len] for c in range(0,last_line,avg_char_len)])
+            #     if word_lines[l+1] - word_lines[l] != last_line:
+            #         chars.append(rotated[lines[y-1]:lines[y],word_lines[l] + last_line:word_lines[l+1]])
+            # else:
+            #     chars.append(rotated[lines[y-1]:lines[y],word_lines[l]:word_lines[l+1]])
+
+            # if last_line:
+            #     char_lines = [c for c in range(0,last_line,avg_char_len)]
+
+            # for c in range(len(char_lines)):
+            #     asd = cv2.line(asd, (word_lines[l] + char_lines[c],lines[y]), (word_lines[l] + char_lines[c], lines[y-1]), (60,0,0), 1)
 
 
     cv2.imshow("asd", asd)
     cv2.waitKey(0)
 
     for i in range(20):
+        # print(chars[i])
         cv2.imshow("char", chars[i])
         cv2.waitKey(0)
 
