@@ -1,0 +1,11 @@
+For Python3 :
+pandas = "0.23.3"
+cv2 = "3.4.5"
+
+For Julia :
+"CSV"         => v"0.4.3"
+"AutoGrad"    => v"1.1.1"
+"Images"      => v"0.16.0"
+"JLD2"        => v"0.1.2"
+"Knet"        => v"1.0.0"
+"DataFrames"  => v"0.16.0"

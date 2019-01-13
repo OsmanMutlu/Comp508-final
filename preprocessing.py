@@ -1,16 +1,19 @@
 import numpy as np
 import cv2
 import argparse
+import pandas as pd
+import re
 
 def main():
-
-    cv2.namedWindow("asd", cv2.WINDOW_NORMAL)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--image", required=True, help="input image file")
     args = parser.parse_args()
 
     image = cv2.imread(args.image)
+    #The site i used to convert pdf to image adds ads
+    # height = image.shape[0]
+    # image = image[90:height-70, :] # Site's ad
 
     # Make image grayscale and make background black and writing white. (White text is better in my opinion.)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -44,8 +47,8 @@ def main():
     binarized = cv2.threshold(rotated, 0, 255,
                            cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
     
-    cv2.imshow("asd", rotated)
-    cv2.waitKey(0)    
+    # cv2.imshow("asd", rotated)
+    # cv2.waitKey(0)    
     # LINE SEPERATION
     # binarized = rotated.copy()
     binarized[binarized > 0] = 1
@@ -138,10 +141,10 @@ def main():
     for y in lines:
         asd = cv2.line(asd, (0,y), (W, y), (200,0,0), 1)
 
-    cv2.imshow("asd", asd)
-    cv2.waitKey(0)
+    # cv2.imshow("asd", asd)
+    # cv2.waitKey(0)
 
-    print(H,",", W)
+#    print(H,",", W)
     chars = []
     # WORD SEGMENTATION
     word_lines_per_line = []
@@ -185,9 +188,9 @@ def main():
     # We don't to this part inside the original loop, because we need every word for taking average
     # Calculate average character width
     # Average word width divided by 5 which is average word length in english
-    avg_char_len = int(np.mean([word_lines[i+1] - word_lines[i] for i in range(len(word_lines)-1) for word_lines in word_lines_per_line])) // 5
+    avg_char_len = int(np.mean([word_lines[i+1] - word_lines[i] for word_lines in word_lines_per_line for i in range(len(word_lines)-1)])) // 5
 
-    print(avg_char_len)
+#    print(avg_char_len)
 
     for y in range(1,len(lines)):
 
@@ -243,7 +246,9 @@ def main():
             else:
                 chars.append(rotated[lines[y-1]:lines[y],word_lines[l]:word_lines[l+1]])
 
-            # Baseline. Just uses average char width
+            chars.append(" ")
+
+            # #Baseline. Just uses average char width
             # if word_lines[l+1] - word_lines[l] > (avg_char_len + (avg_char_len // 2)):
             #     last_line = ((word_lines[l+1] - word_lines[l]) // avg_char_len) * avg_char_len
             #     chars.extend([rotated[lines[y-1]:lines[y],word_lines[l] + c:word_lines[l] + c + avg_char_len] for c in range(0,last_line,avg_char_len)])
@@ -252,20 +257,37 @@ def main():
             # else:
             #     chars.append(rotated[lines[y-1]:lines[y],word_lines[l]:word_lines[l+1]])
 
+
             # if last_line:
             #     char_lines = [c for c in range(0,last_line,avg_char_len)]
 
+            # chars.append(" ")
             # for c in range(len(char_lines)):
             #     asd = cv2.line(asd, (word_lines[l] + char_lines[c],lines[y]), (word_lines[l] + char_lines[c], lines[y-1]), (60,0,0), 1)
 
 
-    cv2.imshow("asd", asd)
-    cv2.waitKey(0)
+    # cv2.imshow("asd", asd)
+    # cv2.waitKey(0)
 
-    for i in range(20):
-        # print(chars[i])
-        cv2.imshow("char", chars[i])
-        cv2.waitKey(0)
+    # for i in range(20):
+    #     # print(chars[i])
+    #     cv2.imshow("char", chars[i])
+    #     cv2.waitKey(0)
+
+    df = pd.DataFrame()
+    for char in chars:
+        if char == " ":
+            df = df.append({'img' : None, 'space' : True}, ignore_index=True)
+            continue
+
+        if char is not None:
+            resized = cv2.resize(char, (28,28))
+            resized = cv2.threshold(resized, 0, 255,
+                                    cv2.THRESH_TOZERO | cv2.THRESH_OTSU)[1]
+            df = df.append({'img':list(np.array(resized).reshape(-1)), 'space' : False}, ignore_index=True)
+
+    csv_file = re.sub(r"\..*$", r".csv", args.image)
+    df.to_csv(csv_file, index=False)
 
 if __name__ == '__main__':
     main()
